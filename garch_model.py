@@ -19,7 +19,6 @@ class MultiStockPortfolioRebalancing:
         self.h_t = np.zeros((T, num_assets, num_assets))  
 
     def compute_variance(self, H_0, Z_t):
-        """Compute time-varying covariance matrix using a multivariate GARCH-like model."""
         self.h_t[0] = H_0  
         for t in range(1, self.T):
             self.h_t[t] = (
@@ -30,7 +29,6 @@ class MultiStockPortfolioRebalancing:
             )
 
     def compute_strategy(self, w_0, H_0, Z_t):
-        """Compute optimal portfolio weights over time for multiple assets."""
         self.compute_variance(H_0, Z_t)
         w_t = np.zeros(self.T)
         w_t[0] = w_0
@@ -70,7 +68,6 @@ class MultiStockPortfolioRebalancing:
         return self.pi_t, w_t
 
     def compute_strategy_with_rebalancing(self, v_0, H_0, Z_t, r_f):
-        """Simulate wealth evolution and rebalancing over multiple assets."""
         self.compute_variance(H_0, Z_t)
         v_t = np.zeros(self.T)
         v_t[0] = v_0

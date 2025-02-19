@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import yfinance as yf
 import numpy as np
 from scipy.optimize import minimize
-from garch_model import PortfolioRebalancing
+from garch_model import MultiStockPortfolioRebalancing
 plt.ion()
 
 class Testing:
@@ -17,9 +17,6 @@ class Testing:
         self.params = None
 
     def get_data(self):
-        """
-        Download historical stock data and calculate daily returns.
-        """
         data = {}
         for stock in self.stocks:
             stock_data = yf.download(stock, start=self.start, end=self.end)
@@ -30,18 +27,12 @@ class Testing:
         return self.data
 
     def set_params(self, initial_params: dict):
-        """
-        Set initial parameters for the GARCH model.
-        """
         # Default values for missing parameters
         initial_params.setdefault("lambda", 0.1)
         initial_params.setdefault("theta", 0.5)
         self.params = initial_params
 
     def optimize_params(self, stock: str):
-        """
-        Optimize GARCH parameters (alpha, beta, omega) for the given stock.
-        """
         if not self.data or stock not in self.data:
             raise ValueError(f"Data for {stock} not available.")
         returns = self.data[stock]["Daily Return"].values
@@ -71,9 +62,6 @@ class Testing:
         return self.params
         
     def run_test(self):
-        """
-        Run the portfolio rebalancing strategy for each stock.
-        """
         results = {}
         for stock in self.stocks:
             if not self.data or stock not in self.data:
@@ -85,7 +73,7 @@ class Testing:
             w_0 = self.wealth  # Actual wealth, not log
 
             # Portfolio rebalancing model with explicit wealth tracking
-            strategy = PortfolioRebalancing(self.params, self.gamma, len(returns))
+            strategy = MultiStockPortfolioRebalancing(self.params, self.gamma, len(returns))
             pi_t, v_t = strategy.compute_strategy_with_rebalancing(w_0, h_0, returns, 0.0001)  # r_f ≈ 0.01% daily
 
             stock_data["Portfolio Weights"] = pi_t
@@ -107,7 +95,7 @@ class Testing:
         return results
 
 
-# Initialize Testing
+""" # Initialize Testing
 tester = Testing(
     stocks=["AAPL"],
     start_date="2020-01-01",
@@ -152,4 +140,4 @@ plt.xlabel("Date")
 plt.ylabel("Wealth")
 plt.legend()
 plt.grid()
-plt.show()
+plt.show() """
