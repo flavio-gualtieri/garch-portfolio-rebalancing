@@ -3,7 +3,7 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from garch_testing import Testing  # Removed redundant MultiStockPortfolioRebalancing import
+from garch_testing import Testing  # Import correctly
 
 # Load S&P 500 stock symbols
 @st.cache_data
@@ -47,7 +47,7 @@ if st.button("Run Backtest"):
             "beta": 0.9,
             "omega": 0.00001,
             "lambda": 0.1,
-            "theta": [0.5] * len(selected_stocks)
+            "theta": np.full(len(selected_stocks), 0.5)  # ✅ Ensure correct array size
         }
         tester.set_params(initial_params)
 
