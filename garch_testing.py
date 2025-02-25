@@ -3,6 +3,7 @@ import yfinance as yf
 import numpy as np
 from scipy.optimize import minimize
 from garch_model import PortfolioRebalancing
+import pandas as pd
 
 plt.ion()
 
@@ -63,7 +64,7 @@ class Testing:
         pi_t, v_t = strategy.compute_strategy_with_rebalancing(w_0, h_0, returns, 0.0001)
 
         self.data["Portfolio Weights"] = pi_t
-        self.data["Actual Wealth"] = v_t
+        self.data["Actual Wealth"] = pd.Series(v_t, index=self.data.index[:len(v_t)])
 
         print(f"Initial Wealth: ${v_t[0]:,.2f}")
         print(f"Final Wealth: ${v_t[-1]:,.2f}")
