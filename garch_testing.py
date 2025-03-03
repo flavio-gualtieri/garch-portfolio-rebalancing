@@ -1,139 +1,201 @@
+# garch_testing.py
+
 import matplotlib.pyplot as plt
-import yfinance as yf
 import numpy as np
-from scipy.optimize import minimize
+from typing import Dict, Any
+
 from garch_model import MultiStockPortfolioRebalancing
+from tools import GARCHTools  # Now using our updated Polygon-based helper
 
 plt.ion()
 
 class Testing:
-    def __init__(self, stocks: list[str], start_date: str, end_date: str, wealth: float, risk_av: float, T: int):
+    """
+    A class to orchestrate:
+      1) Data retrieval for multiple tickers via Polygon.io
+      2) (Optionally) GARCH(1,1) parameter fitting for each ticker
+      3) Setting up and running MultiStockPortfolioRebalancing
+    """
+
+    def __init__(
+        self,
+        stocks: list[str],
+        start_date: str,
+        end_date: str,
+        wealth: float,
+        risk_av: float,
+        T: int,
+        api_key: str
+    ):
         self.stocks = stocks
         self.start = start_date
         self.end = end_date
         self.wealth = wealth
         self.gamma = risk_av
         self.T = T
-        self.data = None
+
+        # Container for fetched data
+        self.data: Dict[str, Any] = {}
+        # For multi-asset returns: shape [Time, NumAssets]
+        self.returns_matrix: np.ndarray | None = None
+
+        # The final dictionary of GARCH parameters (or a single dict for uniform params)
         self.params = None
-        self.returns_matrix = None
+
+        # Instantiate your GARCHTools helper with the Polygon.io API key
+        self.tools = GARCHTools(api_key=api_key)
 
     def get_data(self):
-        """Download stock data and compute daily returns."""
+        """
+        Download stock data for each symbol from Polygon.io, compute daily returns,
+        and build a returns matrix across all assets.
+        """
         data = {}
-        returns_matrix = []
+        all_returns = []
 
         for stock in self.stocks:
-            print(f"Fetching data for {stock}...")  # Debugging print
-            stock_data = yf.download(stock, start=self.start, end=self.end)
+            print(f"Fetching data for {stock}...")
 
-            # Debug: Check if data was downloaded
-            if stock_data.empty or "Close" not in stock_data:
+            # 1) Download data using Polygon
+            stock_df = self.tools.download_stock_data(stock, self.start, self.end)
+            if stock_df.empty or "Close" not in stock_df:
                 print(f"⚠️ Warning: No data found for {stock}. Skipping...")
                 continue
 
-            print(f"✅ Data retrieved for {stock}: {stock_data.shape}")  # Debugging print
+            # 2) Compute daily returns
+            stock_df = self.tools.compute_daily_returns(stock_df)
+            stock_df.dropna(subset=["Daily Return"], inplace=True)
 
-            stock_data["Daily Return"] = stock_data["Close"].pct_change()
-            stock_data = stock_data.dropna()
-
-            # Debug: Check if returns are available
-            if stock_data.empty:
+            if stock_df.empty:
                 print(f"⚠️ Warning: No valid returns for {stock}. Skipping...")
                 continue
 
-            data[stock] = stock_data
-            returns_matrix.append(stock_data["Daily Return"].values)
+            data[stock] = stock_df
+            all_returns.append(stock_df["Daily Return"].values)
+
+            print(f"✅ Data retrieved for {stock} with shape {stock_df.shape}")
 
         if not data:
             raise ValueError("❌ No valid stock data available. Try different stocks or a different date range.")
 
         self.data = data
-        self.returns_matrix = np.array(returns_matrix).T if returns_matrix else np.empty((0, len(self.stocks)))
 
-        # Debug: Check final shape of returns matrix
+        # Align lengths across tickers if needed (trim to the shortest series)
+        min_len = min(len(r) for r in all_returns)
+        all_returns_trimmed = [r[-min_len:] for r in all_returns]
+        self.returns_matrix = np.column_stack(all_returns_trimmed)
+
         print(f"Final returns matrix shape: {self.returns_matrix.shape}")
-
         return self.data
 
+    def set_params(self, params: Dict[str, float]):
+        """
+        Set or update the dictionary of GARCH parameters for the multi-asset model.
+        Example: params = {"alpha": 0.05, "beta": 0.9, "omega": 1e-5, "lambda": 2.0, "theta": [100.0, 120.0]}
+        """
+        self.params = params
+
+    def optimize_params_single_asset(self, stock: str, initial_guess=(0.01, 0.9, 0.01)):
+        """
+        Example method to optimize GARCH parameters for a single ticker,
+        using GARCHTools. You might or might not use this for multi-asset settings.
+        """
+        if stock not in self.data or self.data[stock].empty:
+            print(f"⚠️ No data for {stock}. Skipping GARCH optimization.")
+            return None
+
+        returns = self.data[stock]["Daily Return"].dropna().values
+        bounds = ((1e-6, 1), (1e-6, 1), (1e-6, None))
+        alpha_opt, beta_opt, omega_opt = self.tools.fit_garch_parameters(returns, initial_guess, bounds)
+        return alpha_opt, beta_opt, omega_opt
+
+    def optimize_params_multi_asset(self):
+        """
+        Placeholder: For a joint multi-asset GARCH optimization (e.g., DCC-GARCH), implement here.
+        """
+        pass
 
     def run_test(self):
-        """Execute portfolio rebalancing simulation."""
-        if self.data is None or self.returns_matrix.size == 0:
-            raise ValueError("❌ No valid stock data available. Try different stocks.")
+        """
+        Execute the multi-asset portfolio rebalancing simulation.
+        Returns a dict of DataFrames with results appended to each stock.
+        """
+        if self.returns_matrix is None or self.returns_matrix.size == 0:
+            raise ValueError("❌ No valid stock data or returns matrix. Please run get_data() first.")
 
         num_assets = len(self.stocks)
         T = self.returns_matrix.shape[0]
+        if not self.params:
+            raise ValueError("❌ You must set self.params before running the test.")
 
-        if num_assets < 2:
-            print("⚠️ Warning: At least two stocks are recommended for portfolio rebalancing.")
-
-        # ✅ Ensure covariance matrix is properly computed
+        # Estimate the initial covariance matrix H_0 from the returns
         if num_assets > 1:
-            H_0 = np.cov(self.returns_matrix.T, rowvar=False)
+            H_0 = np.cov(self.returns_matrix.T, rowvar=True)
         else:
-            H_0 = np.var(self.returns_matrix, ddof=1).reshape(1, 1)  # Single stock case
+            H_0 = np.var(self.returns_matrix, ddof=1).reshape(1, 1)
 
-        w_0 = np.full(num_assets, self.wealth / num_assets)  # Evenly allocate initial wealth
-
-        # Initialize strategy
+        # Instantiate the multi-asset portfolio rebalancing strategy
         strategy = MultiStockPortfolioRebalancing(self.params, self.gamma, T, num_assets)
-        pi_t, v_t = strategy.compute_strategy_with_rebalancing(self.wealth, H_0, self.returns_matrix, 0.0001)
 
+        # Run the rebalancing simulation; here using the rebalancing method
+        pi_t, v_t = strategy.compute_strategy_with_rebalancing(
+            v_0=self.wealth,
+            H_0=H_0,
+            Z_t=self.returns_matrix,
+            r_f=0.0001
+        )
+
+        # Append results back to each stock's DataFrame
         results = {}
         for i, stock in enumerate(self.stocks):
-            self.data[stock]["Portfolio Weights"] = pi_t[:, i]
-            self.data[stock]["Actual Wealth"] = v_t
-            results[stock] = self.data[stock]
+            df = self.data[stock]
+            # Align to the last T rows if necessary
+            df = df.iloc[-T:].copy()
+            df["Portfolio Weights"] = pi_t[:, i]
+            df["Actual Wealth"] = v_t
+            results[stock] = df
 
         return results
 
 
-
-""" # Example Usage
+# Example usage:
 if __name__ == "__main__":
+    # Step 1: Instantiate with your Polygon API key
     tester = Testing(
-        stocks=["AAPL", "MSFT"],  # Multi-stock
+        stocks=["AAPL"],
         start_date="2020-01-01",
-        end_date="2023-12-31",
+        end_date="2021-01-01",
         wealth=1_000_000,
         risk_av=-5,
-        T=252  # Trading days in a year
+        T=252,
+        api_key="YOUR_POLYGON_API_KEY"
     )
 
-    # Step 1: Get data
+    # Step 2: Get data from Polygon
     tester.get_data()
 
-    # Step 2: Set initial parameters
-    initial_params = {"alpha": 0.05, "beta": 0.9, "omega": 0.00001}
-    tester.set_params(initial_params)
+    # Step 3: Set parameters (dummy multi-asset parameters; for a single stock, theta can be a list with one value)
+    multi_params = {
+        "alpha": 0.05,
+        "beta": 0.9,
+        "omega": 1e-5,
+        "lambda": 2.0,
+        "theta": [100.0]  # For one stock, theta is a list with one element
+    }
+    tester.set_params(multi_params)
 
-    # Step 3: Optimize parameters
-    optimized_params = tester.optimize_params()
-    print("Optimized Parameters:", optimized_params)
+    # [Optional] Single-asset GARCH optimization example:
+    # alpha_opt, beta_opt, omega_opt = tester.optimize_params_single_asset("AAPL")
+    # print("Optimized parameters for AAPL:", alpha_opt, beta_opt, omega_opt)
 
-    # Step 4: Run portfolio rebalancing test
+    # Step 4: Run the portfolio rebalancing test
     results = tester.run_test()
 
-    # Plot results for each stock
+    # Step 5: Plot the results
     for stock in tester.stocks:
-        stock_data = results[stock]
-
-        plt.figure(figsize=(12, 6))
-        plt.plot(stock_data.index, stock_data["Portfolio Weights"], label=f"{stock} Portfolio Weights")
-        plt.title(f"{stock} Portfolio Weights Over Time")
-        plt.xlabel("Date")
-        plt.ylabel("Weight")
-        plt.legend()
-        plt.grid()
+        df_result = results[stock]
+        df_result["Portfolio Weights"].plot(title=f"{stock} Portfolio Weights")
         plt.show()
 
-        plt.figure(figsize=(12, 6))
-        plt.plot(stock_data.index, stock_data["Actual Wealth"], label=f"{stock} Actual Wealth", color="green")
-        plt.title(f"{stock} Wealth Evolution Over Time")
-        plt.xlabel("Date")
-        plt.ylabel("Wealth")
-        plt.legend()
-        plt.grid()
+        df_result["Actual Wealth"].plot(title=f"{stock} Actual Wealth")
         plt.show()
- """

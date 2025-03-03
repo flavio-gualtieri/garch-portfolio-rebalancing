@@ -3,19 +3,7 @@
 import numpy as np
 
 class MultiStockPortfolioRebalancing:
-    """
-    Manages a multi-asset GARCH portfolio strategy, using a user-supplied
-    covariance update (compute_variance) and the derived closed-form (or
-    approximate) strategy logic.
-    """
-
     def __init__(self, params, gamma, T, num_assets):
-        """
-        :param params: Dictionary of parameters, e.g. {"alpha": ..., "beta": ..., "omega": ..., "lambda": ..., "theta": ...}
-        :param gamma: Risk aversion
-        :param T: Number of time steps
-        :param num_assets: Number of risky assets
-        """
         self.alpha = params["alpha"]
         self.beta = params["beta"]
         self.omega = params["omega"]
@@ -35,14 +23,8 @@ class MultiStockPortfolioRebalancing:
         # h_t: store variance-covariance matrices, shape [T, num_assets, num_assets]
         self.h_t = np.zeros((T, num_assets, num_assets))
 
-    def compute_variance(self, H_0, Z_t):
-        """
-        Update the covariance/variance matrix h_t over time,
-        given initial covariance H_0 and shocks Z_t (shape [T, num_assets]).
 
-        :param H_0: Initial covariance matrix, shape [num_assets, num_assets]
-        :param Z_t: Array of shocks or returns, shape [T, num_assets]
-        """
+    def compute_variance(self, H_0, Z_t):
         self.h_t[0] = H_0
         for t in range(1, self.T):
             # Example placeholder logic (extend for real multi-asset GARCH)
@@ -57,16 +39,8 @@ class MultiStockPortfolioRebalancing:
                 + self.alpha * outer_term
             )
 
-    def compute_strategy(self, w_0, H_0, Z_t):
-        """
-        Compute weights (pi_t) via a backward recursion, then simulate
-        a forward path for log-wealth (w_t).
 
-        :param w_0: Initial log-wealth
-        :param H_0: Initial covariance matrix
-        :param Z_t: Array of shocks/returns, shape [T, num_assets]
-        :return: (pi_t, w_t)
-        """
+    def compute_strategy(self, w_0, H_0, Z_t):
         # 1) Compute the full variance path
         self.compute_variance(H_0, Z_t)
 
@@ -113,17 +87,8 @@ class MultiStockPortfolioRebalancing:
 
         return self.pi_t, w_t
 
-    def compute_strategy_with_rebalancing(self, v_0, H_0, Z_t, r_f):
-        """
-        Alternate approach: track actual holdings in each asset (rather than log-wealth),
-        rebalancing at each step to pi_t.
 
-        :param v_0: Initial total wealth
-        :param H_0: Initial covariance matrix
-        :param Z_t: Shocks or returns, shape [T, num_assets]
-        :param r_f: Risk-free rate per step
-        :return: (pi_t, v_t) for the strategy
-        """
+    def compute_strategy_with_rebalancing(self, v_0, H_0, Z_t, r_f):
         # 1) Compute the variance path
         self.compute_variance(H_0, Z_t)
 
