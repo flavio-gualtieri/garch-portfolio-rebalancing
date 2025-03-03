@@ -10,13 +10,6 @@ from tools import GARCHTools  # Now using our updated Polygon-based helper
 plt.ion()
 
 class Testing:
-    """
-    A class to orchestrate:
-      1) Data retrieval for multiple tickers via Polygon.io
-      2) (Optionally) GARCH(1,1) parameter fitting for each ticker
-      3) Setting up and running MultiStockPortfolioRebalancing
-    """
-
     def __init__(
         self,
         stocks: list[str],
@@ -43,13 +36,10 @@ class Testing:
         self.params = None
 
         # Instantiate your GARCHTools helper with the Polygon.io API key
-        self.tools = GARCHTools(api_key=api_key)
+        self.tools = GARCHTools(api_key='2pMQ6JJ13fOM26Ek5UMIwYjEQVwo1JWi')
+
 
     def get_data(self):
-        """
-        Download stock data for each symbol from Polygon.io, compute daily returns,
-        and build a returns matrix across all assets.
-        """
         data = {}
         all_returns = []
 
@@ -59,7 +49,7 @@ class Testing:
             # 1) Download data using Polygon
             stock_df = self.tools.download_stock_data(stock, self.start, self.end)
             if stock_df.empty or "Close" not in stock_df:
-                print(f"⚠️ Warning: No data found for {stock}. Skipping...")
+                print(f"Warning: No data found for {stock}. Skipping...")
                 continue
 
             # 2) Compute daily returns
@@ -88,20 +78,14 @@ class Testing:
         print(f"Final returns matrix shape: {self.returns_matrix.shape}")
         return self.data
 
+
     def set_params(self, params: Dict[str, float]):
-        """
-        Set or update the dictionary of GARCH parameters for the multi-asset model.
-        Example: params = {"alpha": 0.05, "beta": 0.9, "omega": 1e-5, "lambda": 2.0, "theta": [100.0, 120.0]}
-        """
         self.params = params
 
+
     def optimize_params_single_asset(self, stock: str, initial_guess=(0.01, 0.9, 0.01)):
-        """
-        Example method to optimize GARCH parameters for a single ticker,
-        using GARCHTools. You might or might not use this for multi-asset settings.
-        """
         if stock not in self.data or self.data[stock].empty:
-            print(f"⚠️ No data for {stock}. Skipping GARCH optimization.")
+            print(f"No data for {stock}. Skipping GARCH optimization.")
             return None
 
         returns = self.data[stock]["Daily Return"].dropna().values
@@ -109,17 +93,12 @@ class Testing:
         alpha_opt, beta_opt, omega_opt = self.tools.fit_garch_parameters(returns, initial_guess, bounds)
         return alpha_opt, beta_opt, omega_opt
 
+
     def optimize_params_multi_asset(self):
-        """
-        Placeholder: For a joint multi-asset GARCH optimization (e.g., DCC-GARCH), implement here.
-        """
         pass
 
+
     def run_test(self):
-        """
-        Execute the multi-asset portfolio rebalancing simulation.
-        Returns a dict of DataFrames with results appended to each stock.
-        """
         if self.returns_matrix is None or self.returns_matrix.size == 0:
             raise ValueError("❌ No valid stock data or returns matrix. Please run get_data() first.")
 
@@ -142,7 +121,7 @@ class Testing:
             v_0=self.wealth,
             H_0=H_0,
             Z_t=self.returns_matrix,
-            r_f=0.0001
+            r_f=0.0004
         )
 
         # Append results back to each stock's DataFrame
@@ -158,13 +137,13 @@ class Testing:
         return results
 
 
-# Example usage:
+""" # Example usage:
 if __name__ == "__main__":
     # Step 1: Instantiate with your Polygon API key
     tester = Testing(
         stocks=["AAPL"],
-        start_date="2020-01-01",
-        end_date="2021-01-01",
+        start_date="2023-09-01",
+        end_date="2024-01-01",
         wealth=1_000_000,
         risk_av=-5,
         T=252,
@@ -198,4 +177,4 @@ if __name__ == "__main__":
         plt.show()
 
         df_result["Actual Wealth"].plot(title=f"{stock} Actual Wealth")
-        plt.show()
+        plt.show() """

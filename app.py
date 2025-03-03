@@ -1,87 +1,57 @@
 import streamlit as st
-import yfinance as yf
-import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-from garch_testing import Testing  # Import correctly
+from garch_testing import Testing
 
-# Load S&P 500 stock symbols
-@st.cache_data
-def get_sp500_tickers():
-    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-    tables = pd.read_html(url)
-    sp500_tickers = tables[0]["Symbol"].tolist()
-    return sp500_tickers
+def main():
+    st.title("Portfolio Rebalancing Results")
+    st.write("This app runs a portfolio rebalancing simulation using Polygon.io data.")
 
-sp500_tickers = get_sp500_tickers()
+    # Instantiate the tester with your Polygon API key.
+    tester = Testing(
+        stocks=["META"],
+        start_date="2023-09-01",
+        end_date="2024-01-01",
+        wealth=100,
+        risk_av=3,
+        T=252,
+        api_key="2pMQ6JJ13fOM26Ek5UMIwYjEQVwo1JWi"
+    )
+    
+    st.write("Fetching data from Polygon.io...")
+    tester.get_data()
+    
+    # Set dummy multi-asset parameters (for a single stock, theta is a list with one element)
+    multi_params = {
+        "alpha": 0.05,
+        "beta": 0.9,
+        "omega": 1e-5,
+        "lambda": 2.0,
+        "theta": [100.0]
+    }
+    tester.set_params(multi_params)
+    
+    st.write("Running portfolio rebalancing simulation...")
+    results = tester.run_test()
+    
+    # Loop over each stock (here just AAPL) and display the plots
+    for stock in tester.stocks:
+        df_result = results[stock]
+        
+        st.subheader(f"{stock} Portfolio Weights")
+        fig1, ax1 = plt.subplots()
+        ax1.plot(df_result.index, df_result["Portfolio Weights"])
+        ax1.set_title(f"{stock} Portfolio Weights")
+        ax1.set_xlabel("Date")
+        ax1.set_ylabel("Weight")
+        st.pyplot(fig1)
+        
+        st.subheader(f"{stock} Actual Wealth")
+        fig2, ax2 = plt.subplots()
+        ax2.plot(df_result.index, df_result["Actual Wealth"], color="green")
+        ax2.set_title(f"{stock} Actual Wealth")
+        ax2.set_xlabel("Date")
+        ax2.set_ylabel("Wealth")
+        st.pyplot(fig2)
 
-# Streamlit UI
-st.title("Portfolio Rebalancing Model")
-
-# User Inputs
-selected_stocks = st.multiselect("Select Stocks", sp500_tickers, default=["AAPL"])
-initial_wealth = st.number_input("Initial Wealth ($)", min_value=1000, value=100000, step=1000)
-
-if st.button("Run Backtest"):
-    if not selected_stocks:
-        st.warning("⚠️ Please select at least one stock.")
-    else:
-        st.info("Fetching data and running backtest... ⏳")
-
-        # Initialize backtest with user input
-        tester = Testing(
-            stocks=selected_stocks,
-            start_date="2023-08-01",
-            end_date="2024-02-01",
-            wealth=initial_wealth,
-            risk_av=-5,
-            T=126  # 6 months of trading days
-        )
-
-        # Fetch stock data
-        tester.get_data()
-
-        # Set GARCH parameters
-        initial_params = {
-            "alpha": 0.05,
-            "beta": 0.9,
-            "omega": 0.00001,
-            "lambda": 0.1,
-            "theta": np.full(len(selected_stocks), 0.5)  # ✅ Ensure correct array size
-        }
-        tester.set_params(initial_params)
-
-        # Run backtest
-        results = tester.run_test()
-
-        # Ensure all selected stocks have valid data
-        valid_stocks = [stock for stock in selected_stocks if stock in results]
-        if not valid_stocks:
-            st.error("❌ No valid data retrieved for selected stocks. Try different stocks or dates.")
-            st.stop()
-
-        # --- PLOT 1: Stock Performances ---
-        st.subheader("📈 Stock Performance Over Past 6 Months")
-        plt.figure(figsize=(12, 6))
-        for stock in valid_stocks:
-            stock_data = results[stock]
-            plt.plot(stock_data.index, stock_data["Close"], label=stock)
-        plt.xlabel("Date")
-        plt.ylabel("Stock Price ($)")
-        plt.legend()
-        plt.grid()
-        st.pyplot(plt)
-
-        # --- PLOT 2: Wealth Evolution ---
-        st.subheader("💰 Wealth Evolution Over Time")
-        plt.figure(figsize=(12, 6))
-        for stock in valid_stocks:
-            stock_data = results[stock]
-            plt.plot(stock_data.index, stock_data["Actual Wealth"], label=f"Wealth ({stock})")
-        plt.xlabel("Date")
-        plt.ylabel("Portfolio Value ($)")
-        plt.legend()
-        plt.grid()
-        st.pyplot(plt)
-
-        st.success("✅ Backtest Completed!")
+if __name__ == "__main__":
+    main()
