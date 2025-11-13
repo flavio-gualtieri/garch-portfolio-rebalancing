@@ -1,6 +1,6 @@
 import streamlit as st
 import matplotlib.pyplot as plt
-from garch_testing import Testing
+from old.garch_testing import Testing
 
 def main():
     st.title("Portfolio Rebalancing Results")
@@ -12,7 +12,7 @@ def main():
         start_date="2023-09-01",
         end_date="2024-01-01",
         wealth=100,
-        risk_av=3,
+        risk_av=-0.5,
         T=252,
         api_key="2pMQ6JJ13fOM26Ek5UMIwYjEQVwo1JWi"
     )
