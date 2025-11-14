@@ -10,6 +10,7 @@ from variance_forecaster import VarianceForecaster
 st.set_page_config(page_title="GARCH Variance Forecaster", layout="centered")
 
 st.title("GARCH Variance Forecaster")
+st.caption("Estimate and evaluate GARCH(1,1) variances across multiple assets.")
 
 st.markdown(
     "This app downloads daily price data from Polygon.io, "
